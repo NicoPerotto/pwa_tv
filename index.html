@@ -1,0 +1,242 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Título de la Aplicación -->
+    <title>Demostración PWA Digital Signage</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <!-- Carga de Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lógica de la Aplicación (JavaScript y Lógica de Caché en localStorage) -->
+    <script>
+        // --- Lista de Contenido Multimedia SIMULADO ---
+        // Esta lista simula los metadatos que vendrían de un backend o Drive
+        // Se utiliza para inicializar la caché local del navegador (localStorage).
+        const SIMULATED_MEDIA_LIST = [
+            { id: 'a1', type: 'image', duration: 8000, url: 'https://placehold.co/1080x1920/1a73e8/ffffff?text=OFERTA+DEL+DIA+(8s)+-+PWA', mime: 'image/png' },
+            { id: 'a2', type: 'video', duration: 0, url: 'https://cdn.plyr.io/static/demo/View_From_A_Blue_Moon_Trailer-720p.mp4', mime: 'video/mp4' },
+            { id: 'a3', type: 'image', duration: 6000, url: 'https://placehold.co/1080x1920/f9aa00/000000?text=PRODUCTO+NUEVO+(6s)+-+PWA', mime: 'image/png' },
+            { id: 'a4', type: 'image', duration: 10000, url: 'https://placehold.co/1080x1920/34a853/ffffff?text=HORARIO+DE+APERTURA+(10s)+-+PWA', mime: 'image/png' },
+            { id: 'a5', type: 'image', duration: 7000, url: 'https://placehold.co/1080x1920/800080/ffffff?text=FINAL+DE+BUCLE', mime: 'image/png' },
+        ];
+
+        // --- Variables de Estado Globales ---
+        let mediaItems = [];
+        let currentIndex = 0;
+        let autoplayTimeout = null;
+        const CACHE_KEY = 'pwa_media_cache';
+        const FADE_DURATION = 500; // Duración del efecto de transición (en milisegundos)
+        
+        // --- Lógica de Caché (localStorage) ---
+        
+        const loadMediaItems = () => {
+            const cachedData = localStorage.getItem(CACHE_KEY);
+            
+            if (cachedData) {
+                // Leer desde la caché si existe
+                try {
+                    mediaItems = JSON.parse(cachedData);
+                } catch (e) {
+                    console.error("Error al parsear caché. Usando lista simulada.");
+                    mediaItems = SIMULATED_MEDIA_LIST;
+                }
+            } else {
+                // Si no hay caché, usar la lista simulada y guardarla
+                mediaItems = SIMULATED_MEDIA_LIST;
+                localStorage.setItem(CACHE_KEY, JSON.stringify(mediaItems));
+            }
+        };
+
+
+        // --- Lógica del Carrusel y Autoplay ---
+
+        let container; // Defer initialization until DOM is loaded
+
+        const goToNext = (delay = 0) => {
+            stopAutoplay();
+            
+            // Avanza al siguiente índice, haciendo bucle si es el final
+            currentIndex = (currentIndex + 1) % mediaItems.length;
+            
+            if (delay > 0) {
+                // Si hay un retraso (para imágenes), lo establece
+                autoplayTimeout = setTimeout(displayCurrentItem, delay);
+            } else {
+                // Si no hay retraso (o video), lo muestra inmediatamente
+                displayCurrentItem();
+            }
+        };
+
+        const stopAutoplay = () => {
+            if (autoplayTimeout) {
+                clearTimeout(autoplayTimeout);
+                autoplayTimeout = null;
+            }
+        };
+        
+        // CRÍTICO: Función para saltar al siguiente elemento de forma silenciosa
+        const handleLoadError = () => {
+            console.warn(`Error de carga para el elemento en el índice ${currentIndex}. Saltando...`);
+            // Lógica de salto: va al siguiente sin mostrar nada.
+            goToNext();
+        };
+
+        const displayCurrentItem = async () => {
+            if (mediaItems.length === 0) {
+                displayWaitingScreen(false); // Mostrar pantalla de error si la lista está vacía
+                return;
+            }
+
+            const item = mediaItems[currentIndex];
+            
+            // 1. Iniciar el efecto de fade-out
+            container.classList.add('opacity-0'); 
+            // Esperar la duración del fade-out antes de cambiar el contenido
+            await new Promise(resolve => setTimeout(resolve, FADE_DURATION)); 
+
+            container.innerHTML = ''; // 2. Limpiar contenido anterior
+
+            if (item.type === 'image') {
+                const img = document.createElement('img');
+                img.src = item.url;
+                img.alt = item.id;
+                img.className = 'w-full h-full object-cover';
+                img.onerror = handleLoadError; // Si la imagen falla (offline), salta
+                img.onload = () => {
+                    // 3. Después de cargar la imagen, iniciar el fade-in y el temporizador
+                    container.classList.remove('opacity-0'); 
+                    goToNext(item.duration || 5000); // Duración predefinida
+                };
+                container.appendChild(img);
+
+            } else if (item.type === 'video') {
+                const video = document.createElement('video');
+                video.src = item.url;
+                video.className = 'w-full h-full object-cover';
+                // Atributos esenciales para el autoplay en bucle
+                video.setAttribute('autoplay', '');
+                video.setAttribute('muted', ''); 
+                video.setAttribute('playsinline', '');
+                video.onerror = handleLoadError; // Si el video falla (offline), salta
+                
+                video.onended = () => {
+                    // Cuando el video termina, pasa inmediatamente al siguiente (delay=0)
+                    goToNext();
+                };
+
+                video.onloadeddata = () => {
+                    // 3. Iniciar el fade-in y la reproducción
+                    container.classList.remove('opacity-0'); 
+                    video.play().catch(e => {
+                        console.error("Fallo al reproducir video (puede requerir interacción):", e);
+                        handleLoadError(); // Si la reproducción falla, salta
+                    });
+                };
+                
+                container.appendChild(video);
+            }
+            
+            // 4. Si el elemento no es multimedia conocido, saltar inmediatamente (silenciosamente)
+            if (container.innerHTML === '') {
+                 console.warn(`Tipo de elemento no soportado (${item.type}). Saltando...`);
+                 goToNext();
+            }
+        };
+
+        const displayWaitingScreen = (isInitial = true) => {
+             container.innerHTML = `
+                <div class="flex flex-col items-center justify-center w-full h-full bg-gray-900 text-white p-10">
+                    <svg class="w-12 h-12 ${isInitial ? 'animate-spin' : ''} text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <p class="mt-4 text-xl">${isInitial ? 'Iniciando PWA...' : 'Error Crítico'}</p>
+                    <p class="mt-2 text-sm text-gray-400">${isInitial ? 'Cargando datos. Por favor, espere.' : 'No hay contenido para mostrar.'}</p>
+                </div>
+            `;
+        };
+
+        // --- Registro del Service Worker ---
+        const registerServiceWorker = () => {
+            if ('serviceWorker' in navigator) {
+                // El scope './' permite que el SW controle todos los paths de la aplicación.
+                navigator.serviceWorker.register('/sw.js', { scope: './' }) 
+                    .then(reg => console.log('Service Worker registrado con éxito:', reg.scope))
+                    .catch(err => console.error('Fallo en el registro del SW:', err));
+            }
+        };
+
+
+        // --- Inicialización Principal ---
+        window.onload = function() {
+            container = document.getElementById('media-container'); // Initialize container here
+            registerServiceWorker(); 
+            loadMediaItems();        
+            
+            if (mediaItems.length > 0) {
+                 displayCurrentItem(); // Iniciar el carrusel
+            } else {
+                 displayWaitingScreen(false); // Mostrar error si la lista de archivos está vacía
+            }
+            
+            // Ocultar cursor después de 5s de inactividad (Zero-UI)
+            let lastMove = Date.now();
+            document.body.style.cursor = 'none';
+
+            document.addEventListener('mousemove', () => {
+                lastMove = Date.now();
+                document.body.style.cursor = 'default';
+            });
+
+            setInterval(() => {
+                if (Date.now() - lastMove > 5000) { // 5 segundos de inactividad
+                    document.body.style.cursor = 'none';
+                }
+            }, 1000);
+        };
+
+    </script>
+</head>
+<body class="bg-gray-900 overflow-hidden w-screen h-screen">
+
+    <!-- Estilos de la Aplicación (Cero-UI) -->
+    <style>
+        /* Estilos para forzar el modo a pantalla completa y centrar el contenido */
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            /* El cursor inicia oculto (la lógica JS lo maneja dinámicamente) */
+            cursor: none; 
+        }
+        #media-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            opacity: 1; 
+            /* Se usa la clase 'transition-opacity' de Tailwind y una variable JS para el delay */
+        }
+        /* Asegura que el contenido multimedia llene el contenedor sin distorsión */
+        #media-container img, #media-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Recorta la imagen para llenar el espacio */
+        }
+    </style>
+
+    <!-- Visor Multimedia (Contenedor principal del carrusel) -->
+    <div id="media-container" class="opacity-100 transition-opacity duration-500">
+        <!-- Pantalla de espera inicial -->
+        <div class="flex flex-col items-center justify-center w-full h-full bg-gray-900 text-white p-10">
+            <svg class="w-12 h-12 animate-spin text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <p class="mt-4 text-xl">Cargando demostración...</p>
+            <p class="mt-2 text-sm text-gray-400">Preparando datos de caché local.</p>
+        </div>
+    </div>
+    
+    <!-- NOTA: Para que la PWA funcione completamente offline, el programador debe añadir 'manifest.webmanifest' y el archivo 'sw.js' a la raíz del hosting. -->
+    
+</body>
+</html>
