@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pwa-digital-signage-cache-v2';
+const CACHE_NAME = 'pwa-digital-signage-cache-v3';
 const urlsToCache = [
   './',
   './index.html',
@@ -58,6 +58,7 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(event.request)
         .then(response => {
+          // If the fetch is successful, clone the response, cache it, and return it.
           const responseToCache = response.clone();
           caches.open(CACHE_NAME)
             .then(cache => {
@@ -66,8 +67,8 @@ self.addEventListener('fetch', event => {
           return response;
         })
         .catch(() => {
-          // Network failed, serve from cache
-          return caches.match(event.request);
+          // If the fetch fails (offline), retrieve the main index.html from the cache.
+          return caches.match('./index.html'); // Explicitly ask for the app shell.
         })
     );
     return;
