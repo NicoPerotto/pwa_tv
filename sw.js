@@ -1,26 +1,27 @@
-const CACHE_NAME = 'pwa-digital-signage-cache-v1';
+const CACHE_NAME = 'pwa-digital-signage-cache-v2';
 const urlsToCache = [
   './',
   './index.html',
   'https://cdn.tailwindcss.com',
-  'https://placehold.co/1080x1920/1a73e8/ffffff?text=OFERTA+DEL+DIA+(8s)+-+PWA',
+  // New media list
+  'https://dotsignage.com/wp-content/uploads/2024/04/burger-digital-menu-boards-for-drive-thru.jpg',
   'https://cdn.plyr.io/static/demo/View_From_A_Blue_Moon_Trailer-720p.mp4',
   'https://placehold.co/1080x1920/f9aa00/000000?text=PRODUCTO+NUEVO+(6s)+-+PWA',
   'https://placehold.co/1080x1920/34a853/ffffff?text=HORARIO+DE+APERTURA+(10s)+-+PWA',
   'https://placehold.co/1080x1920/800080/ffffff?text=FINAL+DE+BUCLE',
+  // Icons
   'https://placehold.co/192x192/1a73e8/ffffff?text=PWA',
   'https://placehold.co/512x512/1a73e8/ffffff?text=PWA'
 ];
 
 // Install service worker
 self.addEventListener('install', event => {
-  self.skipWaiting(); // Force the waiting service worker to become the active service worker.
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('Cache opened');
         const promises = urlsToCache.map(url => {
-          // Create a new request with no-cors mode to handle opaque responses from CDNs
           const request = new Request(url, { mode: 'no-cors' });
           return fetch(request).then(response => {
             return cache.put(request, response);
@@ -33,22 +34,7 @@ self.addEventListener('install', event => {
   );
 });
 
-// Fetch content from cache first, then network
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // If request is in cache, return it.
-        if (response) {
-          return response;
-        }
-        // Otherwise, fetch from the network.
-        return fetch(event.request);
-      })
-  );
-});
-
-// Clean up old caches
+// Activate event: clean up old caches
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
@@ -62,5 +48,36 @@ self.addEventListener('activate', event => {
         })
       );
     })
+  );
+});
+
+// Fetch event: Network falling back to cache
+self.addEventListener('fetch', event => {
+  // Strategy: Network falling back to cache for HTML navigation
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME)
+            .then(cache => {
+              cache.put(event.request, responseToCache);
+            });
+          return response;
+        })
+        .catch(() => {
+          // Network failed, serve from cache
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // Strategy: Cache first, falling back to network for other assets
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => {
+        return response || fetch(event.request);
+      })
   );
 });

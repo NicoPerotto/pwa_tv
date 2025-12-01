@@ -15,11 +15,11 @@
         // Esta lista simula los metadatos que vendrían de un backend o Drive
         // Se utiliza para inicializar la caché local del navegador (localStorage).
         const SIMULATED_MEDIA_LIST = [
-            { id: 'a1', type: 'image', duration: 8000, url: 'https://placehold.co/1080x1920/1a73e8/ffffff?text=OFERTA+DEL+DIA+(8s)+-+PWA', mime: 'image/png' },
-            { id: 'a2', type: 'video', duration: 0, url: 'https://cdn.plyr.io/static/demo/View_From_A_Blue_Moon_Trailer-720p.mp4', mime: 'video/mp4' },
-            { id: 'a3', type: 'image', duration: 6000, url: 'https://placehold.co/1080x1920/f9aa00/000000?text=PRODUCTO+NUEVO+(6s)+-+PWA', mime: 'image/png' },
-            { id: 'a4', type: 'image', duration: 10000, url: 'https://placehold.co/1080x1920/34a853/ffffff?text=HORARIO+DE+APERTURA+(10s)+-+PWA', mime: 'image/png' },
-            { id: 'a5', type: 'image', duration: 7000, url: 'https://placehold.co/1080x1920/800080/ffffff?text=FINAL+DE+BUCLE', mime: 'image/png' },
+            { id: 'a1', type: 'image', duration: 3000, url: 'https://dotsignage.com/wp-content/uploads/2024/04/burger-digital-menu-boards-for-drive-thru.jpg', mime: 'image/jpg'},
+            { id: 'a2', type: 'image', duration: 3000, url: 'https://99effect.com/wp-content/uploads/2020/12/Restaurant-Menu-Horizontal-Design-Template-1.jpg', mime: 'image/jpg' },
+            { id: 'a3', type: 'image', duration: 3000, url: 'https://img.freepik.com/premium-vector/flat-pizza-menu-template_23-2151618221.jpg', mime: 'image/jpg'},
+            { id: 'a4', type: 'image', duration: 3000, url: 'https://img.freepik.com/premium-vector/pizza-restaurant-table-menu-template_764664-323.jpg?w=740', mime: 'image/jpg' },
+            { id: 'a5', type: 'image', duration: 3000, url: 'https://gillde.com/wp-content/uploads/2022/10/19-Gillde-Restaurant-Menus0Design-Templates.jpg', mime: 'image/png' },
         ];
 
         // --- Variables de Estado Globales ---
@@ -32,20 +32,16 @@
         // --- Lógica de Caché (localStorage) ---
         
         const loadMediaItems = () => {
-            const cachedData = localStorage.getItem(CACHE_KEY);
+            // Always use the hardcoded list as the "source of truth", simulating a network fetch.
+            mediaItems = SIMULATED_MEDIA_LIST;
             
-            if (cachedData) {
-                // Leer desde la caché si existe
-                try {
-                    mediaItems = JSON.parse(cachedData);
-                } catch (e) {
-                    console.error("Error al parsear caché. Usando lista simulada.");
-                    mediaItems = SIMULATED_MEDIA_LIST;
-                }
-            } else {
-                // Si no hay caché, usar la lista simulada y guardarla
-                mediaItems = SIMULATED_MEDIA_LIST;
+            // Update the localStorage cache for offline use.
+            // If the app goes offline, the service worker will serve the old index.html,
+            // which will then read this cache.
+            try {
                 localStorage.setItem(CACHE_KEY, JSON.stringify(mediaItems));
+            } catch (e) {
+                console.error("Failed to update localStorage cache:", e);
             }
         };
 
